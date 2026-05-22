@@ -6,10 +6,6 @@ default_config = """[General]
 # default: false
 debug=false
 
-# Save Logs
-# default: false
-save-log=false
-
 # Binding IP
 # default: "127.0.0.1"
 ip = "127.0.0.1"
@@ -23,14 +19,23 @@ port=30000
 # 0 is no check for updates
 CheckKeysTime=7200
 
-# Enable BlackList
-blackListEnable=false
-
 # Disable Show System Info
 # Default: false
 # If true, will not show system info in console
-# and will not save system info to log file
 disableSysInfo=false
+
+[Log]
+# Save Logs
+# default: false
+save-log=false
+
+# Log save directory
+# default: logs
+log_dir = "logs"
+
+# Max save log files
+# default: 5
+max_save_log = 5
 
 [Proxy]
 # Enable Proxy

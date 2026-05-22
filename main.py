@@ -6,7 +6,6 @@ import threading
 from time import sleep
 
 from paste.translogger import TransLogger
-from print_color import print
 from waitress import serve
 
 import modules.globalVariables as gVar
@@ -14,6 +13,7 @@ from modules.configs.config import Config
 from modules.console.mainConsole import MainConsole
 from modules.services.defWebapp import WebApp
 from modules.services.publickeys import PublicKeys
+from modules.utils.logger import info, error, warning, debug as log_debug, setup_logger
 from modules.utils.proxies import Proxies
 from modules.utils.sysinfo import sysinfo
 
@@ -24,9 +24,11 @@ def initialize_config() -> None:
     sleep(0.001)
     if cfg.init():
         gVar.cfgContext = cfg.read()
-        print("Config File Loaded", tag='Success', tag_color='green', color='white')
+        setup_logger(gVar.cfgContext, gVar.debugMode)
+        info("Config File Loaded")
     else:
-        sys.exit(print("Please check your config and try again", tag='ERROR', tag_color='red', color='white'))
+        error("Please check your config and try again")
+        sys.exit()
 
 
 def initialize_services() -> None:
@@ -40,10 +42,11 @@ def initialize_services() -> None:
     # Init Proxies Link
     proxies = Proxies()
     if gVar.proxies and not proxies.check_proxies():
-        sys.exit("Proxy is incorrect")
+        error("Proxy is incorrect")
+        sys.exit()
 
 
-def start_waitress(thread=10) -> None:
+def start_waitress(thread:int=10) -> None:
     """Start server with waitress"""
     from modules.webapp.httpLogic import app
     # Set waitress log level
@@ -62,34 +65,20 @@ def start_waitress(thread=10) -> None:
     except PermissionError as e:
         # # Maybe for Windows
         if e.winerror == 10013: # This error code 10013 for windows Port is in use
-            print(f"Error: Port {gVar.cfgContext['General']['port']} is already in use.")
-        print(f"Permission Error: {e}")
+            error(f"Port {gVar.cfgContext['General']['port']} is already in use.")
+        error(f"Permission Error: {e}")
+        sys.exit()
     except OSError as e:
         # This error maybe for unix system, like Linux or macOS
         if e.errno == 98: # Error code 98 is port already use
-            print(f"Error: Port {gVar.cfgContext['General']['port']} is already in use.")
-        print(f"OS Error: {e}")
-    finally:
-        print("Yggdrasil server stopped.")
-        os._exit(0)  # Exit the program
-
-# Don't use other WSGI server, just use flask
-def start_flask_app() -> None:
-    from modules.webapp.httpLogic import app
-    app.run(host=gVar.cfgContext["General"]["ip"],
-            port=gVar.cfgContext["General"]["port"],
-            debug=True,threaded=True,use_reloader=False
-            )
+            error(f"Port {gVar.cfgContext['General']['port']} is already in use.")
+        error(f"OS Error: {e}")
+        sys.exit()
 
 
 # Start WSGI Server thread
 def run_wsgi_server() -> None:
-    if gVar.debugMode:
-        # Just start flask Server
-        start_flask_app()
-    else:
-        # not debug, run waitress
-        start_waitress()
+    start_waitress()
 
 
 def main() -> None:
@@ -101,16 +90,16 @@ def main() -> None:
 
     # If debugMode is true, print all config
     if gVar.debugMode:
-        print("Config: \n", gVar.cfgContext)
+        log_debug(f"Config: \n{gVar.cfgContext}")
         if gVar.cfgContext['Proxy']['enable']:
-            print("ProxiesLink: \n", gVar.proxies)
+            log_debug(f"ProxiesLink: \n{gVar.proxies}")
 
     # print System info
-    try:
-        if not gVar.cfgContext["General"]["disableSysInfo"]:
-            sysinfo()
-    except Exception:
-        sysinfo()
+    # try:
+    #     if not gVar.cfgContext["General"]["disableSysInfo"]:
+    #         sysinfo()
+    # except Exception:
+    #     sysinfo()
 
     # Create a new thread to run http server
     http_thread = threading.Thread(target=run_wsgi_server)
@@ -125,5 +114,6 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print("\nShutting down...")
-        print("Bye~")
+        print("\n")
+        info("Shutting down...")
+        info("Bye~")

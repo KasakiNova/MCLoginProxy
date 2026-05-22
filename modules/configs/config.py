@@ -8,11 +8,10 @@ try:
 except ImportError:
     import tomli as tomllib
 
-from print_color import print
-
 import modules.globalVariables as gVar
 from modules.configs.defaultConfig import create_config_file
 from modules.configs.configChecker import validate_config
+from modules.utils.logger import info, error
 
 class Config:
     def __init__(self):
@@ -27,17 +26,15 @@ class Config:
         # If config.toml does not exist, create it
         if not os.path.exists(self._file_name):
             create_config_file(self._file_name)
-            print("Created default config file", tag="success", tag_color='green', color='white')
+            info("Created default config file")
             return True
 
-        # Check config.toml is not folder
         if not os.path.isfile(self._file_name):
-            print("config.toml not file", tag="Error", tag_color='red', color='white')
+            error("config.toml not file")
             return False
 
-        # Check config.toml is can readable
         if not os.access(self._file_name, os.R_OK):
-            print("config.toml not readable", tag="Error", tag_color='red', color='white')
+            error("config.toml not readable")
             return False
         return True
 

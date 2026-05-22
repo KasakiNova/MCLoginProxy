@@ -7,7 +7,7 @@ import modules.globalVariables as gVar
 def create_index_file(path: str):
     default_index = """{
         "Man!": {
-            "What can i say!": "Mamba, Out!"
+            "Ciallo": "Ciallo"
         }
     }"""
     filename = os.path.join(path, "index.json")
@@ -17,8 +17,10 @@ def create_index_file(path: str):
 class WebApp:
     def __init__(self):
         self._web_dir = gVar.webDir
+        self._index_path = os.path.join(self._web_dir, "index.json")
 
-        # If web this folder not exist, it will create this folder
         if not os.path.exists(self._web_dir):
             os.makedirs(self._web_dir)
+
+        if not os.path.exists(self._index_path):
             create_index_file(self._web_dir)

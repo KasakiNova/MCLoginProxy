@@ -1,4 +1,7 @@
 # coding=utf-8
+from modules.utils.logger import error as log_error
+
+
 def validate_config(config: dict) -> bool:
     schema = {
         "General": {
@@ -53,8 +56,8 @@ def validate_config(config: dict) -> bool:
                         )
 
     if errors:
-        for error in errors:
-            print("Error:", error)
+        for err in errors:
+            log_error(err)
         return False
     else:
         return True

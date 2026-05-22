@@ -3,10 +3,9 @@ import cmd
 import sys
 
 from prettytable import PrettyTable
-from print_color import print
-
 import modules.globalVariables as gVar
 from modules.services.blacklistService import BlacklistService
+from modules.utils.logger import info, error, warning, command_log
 
 
 def _quit_application():
@@ -23,8 +22,9 @@ def _get_server_name(server_id):
 class MainConsole(cmd.Cmd):
     intro_message = (
         "Welcome to Minecraft Yggdrasil Proxy!\n"
-        "Created by KasakiNova and open-sourced under the Apache-2.0 license.\n"
-        "GitHub Repository: https://github.com/KasakiNova/YggdrasilProxy")
+        "Created by KasakiNova\n"
+        "Open-sourced under the Apache-2.0 license.\n"
+        "GitHub Repository: https://github.com/KasakiNova/MCLoginProxy")
     intro = intro_message
     prompt = '--> '
 
@@ -34,60 +34,88 @@ class MainConsole(cmd.Cmd):
         self.blacklistService = BlacklistService()
         self.table = PrettyTable()
 
+    def preloop(self):
+        command_log(f"--> [Init] Console ready.\n{self.intro}")
+
+    def precmd(self, line):
+        if line.strip():
+            command_log(f"--> {line}")
+        return line
+
     def do_ban(self, args):
+        """Ban a player: ban <player_name> [<index>]"""
         if not args:
-            print("No arguments given, use: ban <player_name> [<server_name>]")
+            print("No arguments given, use: ban <player_name> [<index>]")
             return
-        args_split =  args.split(' ')
+        args_split = args.split(' ')
         name = args_split[0]
-        try:
-            server_name = args_split[1]
-        except IndexError:
-            server_name = None
-        info = self.blacklistService.set_account_status(name, 1)
-        if info['msg'] == "Success":
-            print(f"Successfully banned player {name}") # Confirmation message for successful ban
-        elif info['msg'] == "SetError":
-            print(f"Failed to ban player {name}") # Error message if the ban fails
-        elif info['msg'] == "isBaned":
-            print(f"Player {name} has been banned") # Message if the player is already banned
-        elif info['msg'] == "Error":
-            print("An error occurred") # General error message
-        elif info['msg'] == "sameName":
-            if server_name is None:
-                print("Account with the same name") # Message for duplicate names
-                self.table.clear_rows() # Clear previous rows in the table
-                self.table.field_names = ["UUID", "Name", "Server", "Baned"] # Define table headers
-                for row in info['data']:
-                    server_name = _get_server_name(row[2]) # Get server name from server ID
-                    baned = row[3] == 1 # Check if the account is banned
-                    if not baned:
-                        self.table.add_row([row[0], row[1], server_name, baned]) # Add row to the table if not banned
-                    else:
-                        pass # Skip adding if already banned
-                print(self.table) # Print the formatted table
-                print("Please set server_name, use: ban <player_name> <server_name>")
-            elif server_name is not None:
-                info = self.blacklistService.same_name_ban_account(info['data'], server_name)
-                if info['msg'] == "Success":
-                    print(f"Successfully banned player {name}")
-                elif info['msg'] == "SetError":
-                    print(f"Failed to ban player {name}")
-                elif info['msg'] == "isBanedOrUnbanned":
-                    print(f"Player {name} has been banned")
-                else:
-                    print("An error occurred")
+        index = None
+        if len(args_split) > 1:
+            try:
+                index = int(args_split[1])
+            except ValueError:
+                print("Invalid index, use a number")
+                return
+
+        if index is not None:
+            result = self.blacklistService.ban_by_index(name, index)
         else:
-            print("No accounts found or An error occurred.") # Message if no matching accounts are found
+            result = self.blacklistService.ban(name)
+
+        if result['msg'] == "Success":
+            info(f"Successfully banned player {name}")
+        elif result['msg'] == "Already":
+            warning(f"Player {name} has been banned")
+        elif result['msg'] == "NotFound":
+            warning(f"Unable to find {name}")
+        elif result['msg'] == "IndexError":
+            warning(f"Index out of range or invalid")
+        elif result['msg'] == "Multiple":
+            print(f"Found multiple accounts for player \"{name}\":")
+            print(self._build_account_table(result['data']))
+            print("Please specify an index, use: ban <player_name> <index>")
 
     def do_unban(self, args):
+        """Unban a player: unban <player_name> [<index>]"""
         if not args:
-            print("No arguments given, use: ban <player_name> [<server_name>]")
+            print("No arguments given, use: unban <player_name> [<index>]")
             return
-        args_split =  args.split(' ')
+        args_split = args.split(' ')
         name = args_split[0]
-        info = self.blacklistService.unban_ban_account(name, 0)
+        index = None
+        if len(args_split) > 1:
+            try:
+                index = int(args_split[1])
+            except ValueError:
+                print("Invalid index, use a number")
+                return
 
+        if index is not None:
+            result = self.blacklistService.unban_by_index(name, index)
+        else:
+            result = self.blacklistService.unban(name)
+
+        if result['msg'] == "Success":
+            info(f"Successfully unbanned player {name}")
+        elif result['msg'] == "Already":
+            warning(f"Player {name} has not been banned")
+        elif result['msg'] == "NotFound":
+            warning(f"Unable to find {name}")
+        elif result['msg'] == "IndexError":
+            warning(f"Index out of range or invalid")
+        elif result['msg'] == "Multiple":
+            print(f"Found multiple accounts for player \"{name}\":")
+            print(self._build_account_table(result['data']))
+            print("Please specify an index, use: unban <player_name> <index>")
+
+    def _build_account_table(self, data):
+        self.table.clear_rows()
+        self.table.field_names = ["Index", "Name", "Server", "UUID"]
+        for i, row in enumerate(data, start=1):
+            uuid, name, server_id, _ = row
+            srv_name = _get_server_name(server_id)
+            self.table.add_row([i, name, srv_name, uuid])
+        return self.table
 
 
     def do_quit(self, _):
@@ -108,4 +136,4 @@ class MainConsole(cmd.Cmd):
 
     def default(self, line):
         """Unknown Command"""
-        print(f"Unknown Command: {line}", color='red')
+        warning(f"Unknown command: {line}")

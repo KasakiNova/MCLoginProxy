@@ -6,10 +6,9 @@ from json import JSONDecodeError
 from time import sleep
 
 import requests
-from print_color import print
-
 import modules.globalVariables as gVar
 from modules.Errors import ErrorInGettingPublickeysFromMojang, ErrorInGettingPublickeysFromLittleSkin
+from modules.utils.logger import info, error
 
 session = requests.Session()
 session.trust_env = False
@@ -55,9 +54,9 @@ class PublicKeys:
             thread = threading.Thread(target=self.thread)
             thread.daemon = True
             thread.start()
-            print("Update PublicKeys Services Loaded", tag='Success', tag_color='green', color='white')
+            info("Update PublicKeys Services Loaded")
         else:
-            print("PublicKeys Loaded", tag='Success', tag_color='green', color='white')
+            info("PublicKeys Loaded")
 
 
     def thread(self):
@@ -94,7 +93,7 @@ class PublicKeys:
             else:
                 raise ErrorInGettingPublickeysFromMojang("Unable to get publickeys from mojang server")
         except ErrorInGettingPublickeysFromMojang as e:
-            print(str(e), color='red')
+            error(str(e))
             response = self.request(little_skin)
             if response.status_code == 200:
                 self.__keys = response.json()
@@ -105,7 +104,7 @@ class PublicKeys:
             else:
                 raise ErrorInGettingPublickeysFromLittleSkin("Unable to get publickeys from LittleSkin server")
         except ErrorInGettingPublickeysFromLittleSkin as e:
-            print(e)
+            error(str(e))
         pass
 
 
@@ -128,7 +127,6 @@ class PublicKeys:
     def request(self, url):
             try:
                 if self.__proxy_enable:
-                    print()
                     return requests.get(url, self.__proxies)
                 else:
                     return requests.get(url)
