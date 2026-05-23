@@ -10,4 +10,4 @@ RUN sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#https://mirrors.tuna.tsing
     mkdir -p /workspace/static
 
 EXPOSE 30000
-CMD ["/usr/bin/python3", "main.py"]
+CMD ["/usr/bin/python3", "/workspace/main.py"]
