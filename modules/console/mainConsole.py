@@ -4,8 +4,9 @@ import sys
 
 from prettytable import PrettyTable
 import modules.globalVariables as gVar
+from modules.configs.config import Config
 from modules.services.blacklistService import BlacklistService
-from modules.utils.logger import info, error, warning, command_log
+from modules.utils.logger import info, error, warning, command_log, debug, setup_logger
 
 
 def _quit_application():
@@ -21,10 +22,12 @@ def _get_server_name(server_id):
 
 class MainConsole(cmd.Cmd):
     intro_message = (
-        "Welcome to Minecraft Yggdrasil Proxy!\n"
+        "Welcome to Minecraft Login Proxy!\n"
         "Created by KasakiNova\n"
         "Open-sourced under the Apache-2.0 license.\n"
-        "GitHub Repository: https://github.com/KasakiNova/MCLoginProxy")
+        "GitHub Repository: https://github.com/KasakiNova/MCLoginProxy\n"
+        "Type 'help' to list available commands."
+    )
     intro = intro_message
     prompt = '--> '
 
@@ -125,6 +128,21 @@ class MainConsole(cmd.Cmd):
     def do_exit(self, _):
         """Exit Application"""
         _quit_application()
+
+    def do_reload(self, _):
+        """Reload config from config.toml"""
+        try:
+            cfg = Config()
+            cfg.init()
+            gVar.cfgContext = cfg.read()
+            setup_logger(gVar.cfgContext, gVar.debugMode)
+            info("Config reloaded successfully")
+            if gVar.debugMode:
+                debug(f"Config: \n{gVar.cfgContext}")
+                if gVar.cfgContext.get('Proxy', {}).get('enable', False):
+                    debug(f"ProxiesLink: \n{gVar.proxies}")
+        except Exception as e:
+            error(f"Failed to reload config: {e}")
 
     def do_stop(self, _):
         """Stop Application"""
