@@ -1,6 +1,5 @@
 # coding=utf-8
 import logging
-import os
 import sys
 import threading
 from time import sleep
@@ -15,7 +14,6 @@ from modules.services.defWebapp import WebApp
 from modules.services.publickeys import PublicKeys
 from modules.utils.logger import info, error, warning, debug as log_debug, setup_logger
 from modules.utils.proxies import Proxies
-from modules.utils.sysinfo import sysinfo
 
 
 def initialize_config() -> None:
