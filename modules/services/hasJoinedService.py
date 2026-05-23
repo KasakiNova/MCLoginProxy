@@ -136,7 +136,7 @@ class HasJoinedService:
         """Try to add account to accountDB thread"""
         def try_thread():
             if self.account_db.check_uuid_exists(uuid, server):
-                if self.account_db.get_name_by_uuid(uuid, server) is not name.lower():
+                if self.account_db.get_name_by_uuid(uuid, server) != name.lower():
                     self.account_db.update_account_name(uuid, name.lower())
             else:
                 self.account_db.insert_account(uuid, name.lower(), server)
