@@ -46,7 +46,7 @@ enable=false
 # Protocol input required
 # Examples: address="http://127.0.0.1:8080"
 # Supported Protocols: http, https
-address="127.0.0.1:8080"
+address="http://127.0.0.1:8080"
 
 # Enable Auth
 # Default: false
@@ -58,11 +58,11 @@ username=""
 # Proxy Auth Password
 password=""
 
-
 # Auth Servers
 # ServerType:
 # Mojang: Mojang Official Auth Server
 # Blessing: Blessing Skin Server Yggdrasil API
+
 [Server.0]
 # Mojang Official Server
 Name="Mojang"
