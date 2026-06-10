@@ -3,9 +3,10 @@ import os
 
 sep = os.sep
 runningDir = os.getcwd()
-webDir = os.path.join(runningDir, 'static')
+configDir = os.path.join(runningDir, 'config')
+webDir = os.path.join(configDir, 'static')
 configFileName = "config.toml"
-configFilePath = os.path.join(runningDir, configFileName)
+configFilePath = os.path.join(configDir, configFileName)
 accountsInfoDB = os.path.join(webDir,'accounts.db')
 debugMode = False
 

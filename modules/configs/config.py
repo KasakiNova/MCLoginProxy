@@ -15,7 +15,7 @@ from modules.utils.logger import info, error
 
 class Config:
     def __init__(self):
-        self._file_name = gVar.configFileName
+        self._file_name = gVar.configFilePath
         self._content = {}
 
     # Setup config
