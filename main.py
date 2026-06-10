@@ -31,6 +31,13 @@ def initialize_config() -> None:
 
 def initialize_services() -> None:
     """Init WebApp and PublicKeys"""
+    from modules.database.accountInfoDB import check_and_migrate_db
+
+    if check_and_migrate_db():
+        info("Database schema migrated (uuid → uuid+server composite key).")
+        info("Please restart the application.")
+        sys.exit(0)
+
     # setup static dir and index.json
     WebApp()
     # try to init publickeys

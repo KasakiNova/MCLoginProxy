@@ -3,6 +3,41 @@ import sqlite3
 import threading
 import modules.globalVariables as gVar
 
+
+def check_and_migrate_db() -> bool:
+    conn = sqlite3.connect(gVar.accountsInfoDB)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='accounts'"
+    )
+    if not cursor.fetchone():
+        conn.close()
+        return False
+
+    cursor.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='accounts'"
+    )
+    row = cursor.fetchone()
+    if not row or 'uuid TEXT PRIMARY KEY' not in row[0]:
+        conn.close()
+        return False
+
+    conn.executescript('''
+        CREATE TABLE IF NOT EXISTS accounts_new (
+            uuid   TEXT    NOT NULL,
+            name   TEXT    NOT NULL,
+            server INTEGER NOT NULL,
+            baned  INTEGER NOT NULL CHECK (baned IN (0, 1)),
+            PRIMARY KEY (uuid, server)
+        );
+        INSERT OR IGNORE INTO accounts_new SELECT * FROM accounts;
+        DROP TABLE accounts;
+        ALTER TABLE accounts_new RENAME TO accounts;
+    ''')
+    conn.close()
+    return True
+
+
 class AccountInfoDB:
     def __init__(self):
         self._db_path = gVar.accountsInfoDB
@@ -27,10 +62,11 @@ class AccountInfoDB:
             cursor = conn.cursor()
             cursor.execute('''
             CREATE TABLE IF NOT EXISTS accounts (
-                uuid TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
+                uuid   TEXT    NOT NULL,
+                name   TEXT    NOT NULL,
                 server INTEGER NOT NULL,
-                baned INTEGER NOT NULL CHECK (baned IN (0, 1))
+                baned  INTEGER NOT NULL CHECK (baned IN (0, 1)),
+                PRIMARY KEY (uuid, server)
             )
             ''')
             conn.commit()
@@ -39,26 +75,11 @@ class AccountInfoDB:
     def insert_account(self, uuid, name, server, ban=False):
         """Insert new account"""
         ban_value = 1 if ban else 0
-        sql = "INSERT INTO accounts (uuid, name, server, baned) VALUES (?, ?, ?, ?)"
+        sql = "INSERT OR IGNORE INTO accounts (uuid, name, server, baned) VALUES (?, ?, ?, ?)"
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(sql, (uuid, name, server, ban_value))
 
-
-    def get_all_account(self):
-        """Get all accounts"""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM accounts")
-            return cursor.fetchall()
-
-    def get_user_by_uuid(self, uuid):
-        """Query user by UUID"""
-        sql = "SELECT * FROM accounts WHERE uuid = ?"
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(sql, (uuid,))
-            return cursor.fetchone()
 
     def get_account_by_name(self, name):
         """Query account by name"""

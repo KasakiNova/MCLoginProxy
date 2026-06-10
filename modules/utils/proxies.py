@@ -28,12 +28,10 @@ class Proxies:
 
     def check_proxies(self, url = "https://api.myip.la"):
         try:
-            response = requests.get(url=url, proxies=self.__proxies)
+            response = requests.get(url=url, proxies=self.__proxies, timeout=10)
             if response.status_code == 200:
                 return True
             else:
                 raise ProxyError
-        except requests.exceptions.ProxyError:
-            return False
-        except ProxyError:
+        except (requests.exceptions.RequestException, ProxyError):
             return False
