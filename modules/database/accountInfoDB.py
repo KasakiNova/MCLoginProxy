@@ -1,11 +1,25 @@
 # coding=utf-8
+"""SQLite-backed account database with schema migration support.
+
+Table ``accounts`` uses a composite primary key ``(uuid, server)`` so
+the same Minecraft UUID can appear on different authentication servers.
+
+Thread safety is achieved via ``threading.local()`` — each thread
+gets its own SQLite connection.
+"""
 import os
 import sqlite3
 import threading
+
 import modules.globalVariables as gVar
 
 
 def check_and_migrate_db() -> bool:
+    """Detect old ``accounts`` schema (uuid-only PK) and migrate.
+
+    Returns:
+        True if a migration was performed, False otherwise.
+    """
     if not os.path.isfile(gVar.accountsInfoDB):
         return False
 
@@ -43,25 +57,21 @@ def check_and_migrate_db() -> bool:
 
 
 class AccountInfoDB:
-    def __init__(self):
+    """Thread-local access to the ``accounts`` SQLite table."""
+
+    def __init__(self) -> None:
         self._db_path = gVar.accountsInfoDB
         self.local = threading.local()
         self.create_table()
 
-
-    def _get_connection(self):
+    def _get_connection(self) -> sqlite3.Connection:
+        """Return (or create) the per-thread SQLite connection."""
         if not hasattr(self.local, "connection"):
             self.local.connection = sqlite3.connect(self._db_path)
         return self.local.connection
 
-
-    def _get_cursor(self):
-        conn = self._get_connection()
-        return conn.cursor()
-
-
-    def create_table(self):
-        """Create Tables (If not exists)"""
+    def create_table(self) -> None:
+        """Create the ``accounts`` table if it does not already exist."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -75,26 +85,28 @@ class AccountInfoDB:
             ''')
             conn.commit()
 
-
-    def insert_account(self, uuid, name, server, ban=False):
-        """Insert new account"""
+    def insert_account(self, uuid: str, name: str, server: int,
+                       ban: bool = False) -> None:
+        """Insert a new account row; silently skip on PK conflict."""
         ban_value = 1 if ban else 0
-        sql = "INSERT OR IGNORE INTO accounts (uuid, name, server, baned) VALUES (?, ?, ?, ?)"
+        sql = (
+            "INSERT OR IGNORE INTO accounts (uuid, name, server, baned) "
+            "VALUES (?, ?, ?, ?)"
+        )
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(sql, (uuid, name, server, ban_value))
 
-
-    def get_account_by_name(self, name):
-        """Query account by name"""
+    def get_account_by_name(self, name: str) -> list:
+        """Return all rows matching *name* (case-insensitive by convention)."""
         sql = "SELECT * FROM accounts WHERE name = ?"
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(sql, (name,))
             return cursor.fetchall()
 
-    def get_name_by_uuid(self, uuid, server):
-        """Query user by UUID"""
+    def get_name_by_uuid(self, uuid: str, server: int) -> str | None:
+        """Return the stored name for a given *uuid* and *server*."""
         sql = "SELECT name FROM accounts WHERE uuid = ? AND server = ? LIMIT 1"
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -102,8 +114,8 @@ class AccountInfoDB:
             result = cursor.fetchone()
             return result[0] if result else None
 
-    def get_baned_by_uuid(self, uuid, server):
-        """Query ban by UUID and ServerId"""
+    def get_baned_by_uuid(self, uuid: str, server: int) -> bool | None:
+        """Return the ``baned`` flag for *uuid* on *server*."""
         sql = "SELECT baned FROM accounts WHERE uuid = ? AND server = ?"
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -111,15 +123,17 @@ class AccountInfoDB:
             result = cursor.fetchone()
             return bool(result[0]) if result else None
 
-    def update_account_name(self, uuid, new_name):
-        """Update the account's name based on UUID"""
-        sql = "UPDATE accounts SET name = ? WHERE uuid = ?"
+    def update_account_name(self, uuid: str, server: int,
+                            new_name: str) -> None:
+        """Update the name for a specific *uuid* on *server*."""
+        sql = "UPDATE accounts SET name = ? WHERE uuid = ? AND server = ?"
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(sql, (new_name, uuid))
+            cursor.execute(sql, (new_name, uuid, server))
 
-    def set_account_baned(self, uuid, server, status: int):
-        """Ban and unban the account"""
+    def set_account_baned(self, uuid: str, server: int,
+                          status: int) -> bool:
+        """Set the ``baned`` flag (0 or 1) for *uuid* on *server*."""
         sql = "UPDATE accounts SET baned = ? WHERE uuid = ? AND server = ?"
         try:
             with self._get_connection() as conn:
@@ -128,19 +142,20 @@ class AccountInfoDB:
             return True
         except sqlite3.Error:
             return False
-        finally:
-            self.close()
 
-    def check_uuid_exists(self, user_uuid, server_id):
-        """Check if a user with the given UUID exists in the database"""
-        sql = "SELECT * FROM accounts WHERE uuid = ? AND server = ? LIMIT 1"
+    def check_uuid_exists(self, user_uuid: str, server_id: int) -> bool:
+        """Return True if *user_uuid* already exists on *server_id*."""
+        sql = (
+            "SELECT * FROM accounts "
+            "WHERE uuid = ? AND server = ? LIMIT 1"
+        )
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(sql, (user_uuid, server_id))
             return cursor.fetchone() is not None
 
-    def close(self):
-        """Close the database connection for the current thread."""
+    def close(self) -> None:
+        """Close the per-thread SQLite connection (if open)."""
         if hasattr(self.local, "connection"):
             self.local.connection.close()
             del self.local.connection

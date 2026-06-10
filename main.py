@@ -1,4 +1,12 @@
 # coding=utf-8
+"""MCLoginProxy - Minecraft Yggdrasil authentication proxy server.
+
+Routes Minecraft client ``hasJoined`` requests through configurable
+authentication servers (Mojang official and third-party Blessing Skin
+Yggdrasil APIs), with per-server blacklist support.
+
+Usage: python main.py
+"""
 import logging
 import sys
 import threading
@@ -17,7 +25,7 @@ from modules.utils.proxies import Proxies
 
 
 def initialize_config() -> None:
-    """Init Config"""
+    """Load and validate ``config.toml``; create default if missing."""
     cfg = Config()
     sleep(0.001)
     if cfg.init():
@@ -30,7 +38,7 @@ def initialize_config() -> None:
 
 
 def initialize_services() -> None:
-    """Init WebApp and PublicKeys"""
+    """Initialize database migration, static files, publickeys, and proxy."""
     from modules.database.accountInfoDB import check_and_migrate_db
 
     if check_and_migrate_db():
@@ -38,23 +46,21 @@ def initialize_services() -> None:
         info("Please restart the application.")
         sys.exit(0)
 
-    # setup static dir and index.json
     WebApp()
-    # try to init publickeys
+
     publickeys = PublicKeys()
     publickeys.start_thread()
 
-    # Init Proxies Link
     proxies = Proxies()
     if gVar.proxies and not proxies.check_proxies():
         error("Proxy is incorrect")
         sys.exit()
 
 
-def start_waitress(thread:int=10) -> None:
-    """Start server with waitress"""
+def start_waitress(thread: int = 10) -> None:
+    """Launch the Waitress WSGI server (blocking)."""
     from modules.webapp.httpLogic import app
-    # Set waitress log level
+
     logger = logging.getLogger("waitress")
     logger.setLevel(logging.INFO)
     try:
@@ -68,52 +74,39 @@ def start_waitress(thread:int=10) -> None:
             max_request_body_size=10 * 1024 * 1024
         )
     except PermissionError as e:
-        # # Maybe for Windows
-        if e.winerror == 10013: # This error code 10013 for windows Port is in use
+        if e.winerror == 10013:
             error(f"Port {gVar.cfgContext['General']['port']} is already in use.")
         error(f"Permission Error: {e}")
         sys.exit()
     except OSError as e:
-        # This error maybe for unix system, like Linux or macOS
-        if e.errno == 98: # Error code 98 is port already use
+        if e.errno == 98:
             error(f"Port {gVar.cfgContext['General']['port']} is already in use.")
         error(f"OS Error: {e}")
         sys.exit()
 
 
-# Start WSGI Server thread
 def run_wsgi_server() -> None:
+    """Start the WSGI server (convenience wrapper)."""
     start_waitress()
 
 
 def main() -> None:
-    """Main Service"""
-
-    # init config and services
+    """Application entry point."""
     initialize_config()
     initialize_services()
 
-    # If debugMode is true, print all config
     if gVar.debugMode:
         log_debug(f"Config: \n{gVar.cfgContext}")
         if gVar.cfgContext['Proxy']['enable']:
             log_debug(f"ProxiesLink: \n{gVar.proxies}")
 
-    # print System info
-    # try:
-    #     if not gVar.cfgContext["General"]["disableSysInfo"]:
-    #         sysinfo()
-    # except Exception:
-    #     sysinfo()
-
-    # Create a new thread to run http server
     http_thread = threading.Thread(target=run_wsgi_server)
-    http_thread.daemon=True
+    http_thread.daemon = True
     http_thread.start()
 
-    # Running Console
     sleep(0.5)
     MainConsole().cmdloop()
+
 
 if __name__ == '__main__':
     try:

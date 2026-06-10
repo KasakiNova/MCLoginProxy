@@ -1,6 +1,13 @@
 # coding=utf-8
-import sys
+"""Config file creation, validation, and loading for MCLoginProxy.
+
+Handles ``config/config.toml``:
+- Creates a default TOML file if missing.
+- Validates every section/field type before use.
+- Provides the ``Config`` class for init and read operations.
+"""
 import os
+import sys
 
 try:
     import tomllib
@@ -90,12 +97,17 @@ Url="https://littleskin.cn/api/yggdrasil"
 
 
 def create_config_file(path: str) -> None:
+    """Write the default config to *path*, creating parent dirs if needed."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as configfile:
         configfile.write(default_config)
 
 
 def validate_config(config: dict) -> bool:
+    """Return True if *config* matches the expected schema.
+
+    Logs every type mismatch via the error logger.
+    """
     schema = {
         "General": {
             "debug": bool,
@@ -128,15 +140,17 @@ def validate_config(config: dict) -> bool:
     for section, fields in schema.items():
         if section == "Server":
             continue
-
         if section in config:
             for field, expected_type in fields.items():
                 if field in config[section]:
                     actual_value = config[section][field]
                     if not isinstance(actual_value, expected_type):
-                        errors.append(
-                            f"{section}.{field}: Expected {expected_type.__name__}, got {type(actual_value).__name__}"
+                        msg = (
+                            f"{section}.{field}: "
+                            f"Expected {expected_type.__name__}, "
+                            f"got {type(actual_value).__name__}"
                         )
+                        errors.append(msg)
 
     for key, server_config in config.items():
         if key.startswith("Server.") and isinstance(server_config, dict):
@@ -144,24 +158,32 @@ def validate_config(config: dict) -> bool:
                 if field in server_config:
                     actual_value = server_config[field]
                     if not isinstance(actual_value, expected_type):
-                        errors.append(
-                            f"{key}.{field}: Expected {expected_type.__name__}, got {type(actual_value).__name__}"
+                        msg = (
+                            f"{key}.{field}: "
+                            f"Expected {expected_type.__name__}, "
+                            f"got {type(actual_value).__name__}"
                         )
+                        errors.append(msg)
 
     if errors:
         for err in errors:
             error(err)
         return False
-    else:
-        return True
+    return True
 
 
 class Config:
-    def __init__(self):
+    """Manage ``config/config.toml`` lifecycle."""
+
+    def __init__(self) -> None:
         self._file_name = gVar.configFilePath
-        self._content = {}
 
     def init(self) -> bool:
+        """Ensure config file exists and is readable; create default if missing.
+
+        Returns:
+            True when config is ready for reading.
+        """
         if not os.path.exists(self._file_name):
             create_config_file(self._file_name)
             info("Created default config file")
@@ -177,6 +199,7 @@ class Config:
         return True
 
     def read(self) -> dict:
+        """Parse and validate the config file; return the resulting dict."""
         with open(self._file_name, 'rb') as fff:
             f = tomllib.load(fff)
             if not validate_config(f):

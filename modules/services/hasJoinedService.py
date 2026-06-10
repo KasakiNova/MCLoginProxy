@@ -1,4 +1,10 @@
 # coding=utf-8
+"""Query upstream Yggdrasil auth servers for player profiles.
+
+Iterates over configured servers (Mojang and Blessing Skin types),
+fetches ``hasJoined`` data, checks the local blacklist, and records
+new accounts in the SQLite database.
+"""
 import threading
 from typing import TypedDict
 
@@ -11,17 +17,15 @@ from modules.services.blacklistService import BlacklistService
 from modules.utils.logger import info, error, warning, debug as log_debug
 
 
-session = requests.Session()
-session.trust_env = False
-
-
 class MsgType(TypedDict):
     status: bool
     data: dict
 
 
 class HasJoinedService:
-    def __init__(self):
+    """Service that proxies Minecraft ``hasJoined`` requests."""
+
+    def __init__(self) -> None:
         self.__username = ""
         self.__server_id = ""
         self.__proxy_enable = gVar.cfgContext['Proxy']['enable']
@@ -29,119 +33,116 @@ class HasJoinedService:
         self.blacklist = BlacklistService()
         self.account_db = AccountInfoDB()
 
-    def get_profile(self, username: str, server_id: str):
+    def get_profile(self, username: str, server_id: str) -> dict | None:
+        """Query all configured auth servers for *username* and *server_id*.
+
+        Returns the first un-banned profile dict, or None.
+        """
         self.__username = username
         self.__server_id = server_id
         servers = gVar.cfgContext["Server"]
-        # Use a for loop to iterate through the server list
+
         for dict_server_id, serial in servers.items():
-            # If ServerType is about mojang or official, running this
-            if serial['ServerType'].lower() in {"mojang", "official"}:
-                try:
-                    msg: MsgType = self.request_mojang(serial['NeedProxy'])
-                    if msg['status'] is False:
-                        raise FailureToFetchProfile(
-                            f"Unable to get {username} profile from {serial['Name']} server")
-                    is_allowed = self.check_profile(msg, dict_server_id)
-                    if is_allowed:
-                        info(f"Successfully fetched player {self.__username} in {serial['Name']} server")
-                        return msg['data']
-                    else:
-                        raise PlayerIsBaned(
-                            f"Player {username} has baned"
-                        )
-                except FailureToFetchProfile as e:
-                    error(str(e))
-                    continue
-                except PlayerIsBaned as e:
-                    warning(str(e))
-                    return None
-            elif serial['ServerType'].lower() in {"blessing"}:
-                try:
-                    msg: MsgType = self.request_blessing(serial['Url'], serial['NeedProxy'])
-                    if msg['status'] is False:
-                        raise FailureToFetchProfile(
-                            f"Unable to get {username} profile from {serial['Name']} server")
-                    is_allowed = self.check_profile(msg, dict_server_id)
-                    if is_allowed:
-                        info(f"Successfully fetched player {self.__username} in {serial['Name']} server")
-                        return msg['data']
-                    else:
-                        raise PlayerIsBaned(
-                            f"Player {username} has baned"
-                        )
-                except FailureToFetchProfile as e:
-                    error(str(e))
-                    continue
-                except PlayerIsBaned as e:
-                    warning(str(e))
-                    return None
+            server_type = serial['ServerType'].lower()
+
+            if server_type in {"mojang", "official"}:
+                url = (
+                    f"https://sessionserver.mojang.com"
+                    f"/session/minecraft/hasJoined"
+                    f"?username={username}&serverId={server_id}"
+                )
+            elif server_type == "blessing":
+                url = (
+                    f"{serial['Url']}/sessionserver/session/minecraft/"
+                    f"hasJoined?username={username}&serverId={server_id}"
+                )
+            else:
+                continue
+
+            result = self._try_server(
+                url, serial['NeedProxy'], serial['Name'], dict_server_id
+            )
+            if result is not None:
+                return result
+
         warning(f"Unable to get player {username} profile from All server")
         return None
 
+    def _try_server(self, url: str, need_proxy: bool,
+                    server_name: str, server_id: str) -> dict | None:
+        """Request one auth server and check profile / ban status.
 
-    # Enter the self.request_* dictionary and the server id in the configuration file
-    # to try to determine whether the account is banned.
-    # If it is not banned, try to add it to the database
-    def check_profile(self, msg: MsgType, server_id) -> bool:
+        Returns:
+            Profile dict on success, None to try next server, or a
+            sentinel ``False`` (returned as None to caller) when the
+            player is banned.
+        """
+        msg = self._request(url, need_proxy)
+        if not msg['status']:
+            error(
+                f"Unable to get {self.__username} profile "
+                f"from {server_name} server"
+            )
+            return None
+
+        if not self.check_profile(msg, server_id):
+            warning(f"Player {self.__username} has baned")
+            return None
+
+        info(
+            f"Successfully fetched player {self.__username} "
+            f"in {server_name} server"
+        )
+        return msg['data']
+
+    def check_profile(self, msg: MsgType, server_id: str) -> bool:
+        """Check if *msg* is valid and the player is not blacklisted.
+
+        If the player passes, asynchronously record the account.
+        """
         if not msg['status']:
             return False
         if gVar.debugMode:
             log_debug(str(msg['data']))
         if self.blacklist.check_is_blacklisted(msg['data']['id'], server_id):
             return False
-        self.try_to_add_account_to_db_thread(
+        self._record_account(
             msg['data']['name'],
             msg['data']['id'],
             server_id
         )
         return True
 
+    def _request(self, url: str, proxy: bool) -> dict:
+        """Perform an HTTP GET, optionally through the configured proxy.
 
-    # request_tool use to requests.get, but support proxy
-    def request_tool(self, url, proxy) -> dict:
-        if proxy and self.__proxy_enable:
-            response = requests.get(url, proxies=self.__proxies)
-        else:
-            response = requests.get(url=url)
-        if response.status_code != 200:
+        Returns a ``{'status': bool, 'data': dict}``-shaped dict.
+        """
+        try:
+            if proxy and self.__proxy_enable:
+                response = requests.get(
+                    url, proxies=self.__proxies, timeout=10
+                )
+            else:
+                response = requests.get(url, timeout=10)
+            if response.status_code != 200:
+                return {'status': False}
+            return {'status': True, 'data': response.json()}
+        except requests.exceptions.RequestException:
             return {'status': False}
-        return_msg: MsgType = {'status': True, 'data': response.json()}
-        return return_msg
 
-
-    # Request Mojang official session server
-    # insert username and serverId build full url
-    def request_mojang(self, proxy: bool):
-        # this is mojang official session server
-        domain = "https://sessionserver.mojang.com"
-        # build request hasJoined Link
-        url = f"{domain}/session/minecraft/hasJoined?username={self.__username}&serverId={self.__server_id}"
-        # use request_tool to request
-        return self.request_tool(url, proxy)
-
-
-    # Request blessing skin server Yggdrasil API session server
-    # insert username and serverId build full url
-    def request_blessing(self, i_url, proxy: bool):
-        # just build blessing skin server Yggdrasil API link
-        url = f"{i_url}/sessionserver/session/minecraft/hasJoined?username={self.__username}&serverId={self.__server_id}"
-        return self.request_tool(url, proxy)
-
-
-    #Create a new thread to try to add the account to the database.
-    # If it already exists, do nothing.
-    # If it already exists but the player name has changed, update the name
-    def try_to_add_account_to_db_thread(self, name, uuid, server):
-        """Try to add account to accountDB thread"""
-        def try_thread():
+    def _record_account(self, name: str, uuid: str,
+                        server: str) -> None:
+        """Upsert an account row in a background thread."""
+        def _work():
             if self.account_db.check_uuid_exists(uuid, server):
                 if self.account_db.get_name_by_uuid(uuid, server) != name.lower():
-                    self.account_db.update_account_name(uuid, name.lower())
+                    self.account_db.update_account_name(
+                        uuid, server, name.lower()
+                    )
             else:
                 self.account_db.insert_account(uuid, name.lower(), server)
-        # this well be created a new thread
-        try_add_thread = threading.Thread(target=try_thread)
-        try_add_thread.daemon=True
-        try_add_thread.start()
 
+        thread = threading.Thread(target=_work)
+        thread.daemon = True
+        thread.start()

@@ -1,26 +1,36 @@
 # coding=utf-8
+"""Interactive console for MCLoginProxy.
+
+Provides ``ban`` / ``unban`` / ``reload`` / ``quit`` commands
+via the Python ``cmd`` module.
+"""
 import cmd
 import sys
 
 from prettytable import PrettyTable
+
 import modules.globalVariables as gVar
 from modules.configs.config import Config
 from modules.services.blacklistService import BlacklistService
 from modules.utils.logger import info, error, warning, command_log, debug, setup_logger
+from modules.utils.proxies import Proxies
 
 
-def _quit_application():
-    """Quit Application"""
+def _quit_application() -> None:
+    """Print shutdown message and exit."""
     print("\nShutting down...")
     print("Bye~")
     sys.exit(0)
 
 
-def _get_server_name(server_id):
+def _get_server_name(server_id) -> str:
+    """Return the human-readable server name for a given config key."""
     return gVar.cfgContext['Server'][str(server_id)]['Name']
 
 
 class MainConsole(cmd.Cmd):
+    """CLI console for the proxy server."""
+
     intro_message = (
         "Welcome to Minecraft Login Proxy!\n"
         "Created by KasakiNova\n"
@@ -31,21 +41,29 @@ class MainConsole(cmd.Cmd):
     intro = intro_message
     prompt = '--> '
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.has_new_data = False
         self.blacklistService = BlacklistService()
         self.table = PrettyTable()
 
-    def preloop(self):
+    def preloop(self) -> None:
+        """Log console startup."""
         command_log(f"--> [Init] Console ready.\n{self.intro}")
 
-    def precmd(self, line):
+    def precmd(self, line: str) -> str:
+        """Log every command before execution."""
         if line.strip():
             command_log(f"--> {line}")
         return line
 
-    def do_ban(self, args):
+    def emptyline(self) -> None:
+        """Do nothing on empty input (don't repeat last command)."""
+
+    def default(self, line: str) -> None:
+        """Handle unrecognized commands."""
+        warning(f"Unknown command: {line}")
+
+    def do_ban(self, args: str) -> None:
         """Ban a player: ban <player_name> [<index>]"""
         if not args:
             print("No arguments given, use: ban <player_name> [<index>]")
@@ -65,20 +83,9 @@ class MainConsole(cmd.Cmd):
         else:
             result = self.blacklistService.ban(name)
 
-        if result['msg'] == "Success":
-            info(f"Successfully banned player {name}")
-        elif result['msg'] == "Already":
-            warning(f"Player {name} has been banned")
-        elif result['msg'] == "NotFound":
-            warning(f"Unable to find {name}")
-        elif result['msg'] == "IndexError":
-            warning(f"Index out of range or invalid")
-        elif result['msg'] == "Multiple":
-            print(f"Found multiple accounts for player \"{name}\":")
-            print(self._build_account_table(result['data']))
-            print("Please specify an index, use: ban <player_name> <index>")
+        self._handle_result(result, "ban", name)
 
-    def do_unban(self, args):
+    def do_unban(self, args: str) -> None:
         """Unban a player: unban <player_name> [<index>]"""
         if not args:
             print("No arguments given, use: unban <player_name> [<index>]")
@@ -98,20 +105,28 @@ class MainConsole(cmd.Cmd):
         else:
             result = self.blacklistService.unban(name)
 
+        self._handle_result(result, "unban", name)
+
+    def _handle_result(self, result: dict, action: str, name: str) -> None:
+        """Display the outcome of a ban/unban command."""
         if result['msg'] == "Success":
-            info(f"Successfully unbanned player {name}")
+            info(f"Successfully {action}ned player {name}")
         elif result['msg'] == "Already":
-            warning(f"Player {name} has not been banned")
+            warning(f"Player {name} has already been {action}ned")
         elif result['msg'] == "NotFound":
             warning(f"Unable to find {name}")
         elif result['msg'] == "IndexError":
-            warning(f"Index out of range or invalid")
+            warning("Index out of range or invalid")
         elif result['msg'] == "Multiple":
             print(f"Found multiple accounts for player \"{name}\":")
             print(self._build_account_table(result['data']))
-            print("Please specify an index, use: unban <player_name> <index>")
+            print(
+                f"Please specify an index, "
+                f"use: {action} <player_name> <index>"
+            )
 
-    def _build_account_table(self, data):
+    def _build_account_table(self, data: list) -> PrettyTable:
+        """Render a PrettyTable for account lookup results."""
         self.table.clear_rows()
         self.table.field_names = ["Index", "Name", "Server", "UUID"]
         for i, row in enumerate(data, start=1):
@@ -120,22 +135,26 @@ class MainConsole(cmd.Cmd):
             self.table.add_row([i, name, srv_name, uuid])
         return self.table
 
-
-    def do_quit(self, _):
+    def do_quit(self, _) -> None:
         """Quit Application"""
         _quit_application()
 
-    def do_exit(self, _):
+    def do_exit(self, _) -> None:
         """Exit Application"""
         _quit_application()
 
-    def do_reload(self, _):
+    def do_stop(self, _) -> None:
+        """Stop Application"""
+        _quit_application()
+
+    def do_reload(self, _) -> None:
         """Reload config from config.toml"""
         try:
             cfg = Config()
             cfg.init()
             gVar.cfgContext = cfg.read()
             setup_logger(gVar.cfgContext, gVar.debugMode)
+            Proxies()
             info("Config reloaded successfully")
             if gVar.debugMode:
                 debug(f"Config: \n{gVar.cfgContext}")
@@ -143,15 +162,3 @@ class MainConsole(cmd.Cmd):
                     debug(f"ProxiesLink: \n{gVar.proxies}")
         except Exception as e:
             error(f"Failed to reload config: {e}")
-
-    def do_stop(self, _):
-        """Stop Application"""
-        _quit_application()
-
-    def emptyline(self):
-        """Override the default behavior of repeating the last command on an empty line."""
-        pass  # Do nothing
-
-    def default(self, line):
-        """Unknown Command"""
-        warning(f"Unknown command: {line}")

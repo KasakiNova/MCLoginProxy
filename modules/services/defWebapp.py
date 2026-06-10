@@ -1,21 +1,26 @@
 # coding=utf-8
+"""Ensure the static web directory and default ``index.json`` exist."""
 import os
 
 import modules.globalVariables as gVar
 
-# Create default index.json use this shit
-def create_index_file(path: str):
+
+def create_index_file(path: str) -> None:
+    """Write a default ``index.json`` into *path*."""
     default_index = """{
-        "Man!": {
-            "Ciallo": "Ciallo"
-        }
-    }"""
+    "Man!": {
+        "Ciallo": "Ciallo"
+    }
+}"""
     filename = os.path.join(path, "index.json")
     with open(filename, 'w') as configfile:
         configfile.write(default_index)
 
+
 class WebApp:
-    def __init__(self):
+    """Initialize the static file directory for the Flask application."""
+
+    def __init__(self) -> None:
         self._web_dir = gVar.webDir
         self._index_path = os.path.join(self._web_dir, "index.json")
 

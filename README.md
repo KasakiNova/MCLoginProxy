@@ -21,10 +21,10 @@ MCLoginProxy sits between your Minecraft server (with [authlib-injector](https:/
 
 ## HTTP Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET    | `/` | Returns the Yggdrasil API meta document (`static/index.json`) |
-| GET    | `/minecraftservices/publickeys` | Returns the cached Mojang public keys |
+| Method | Path                                         | Description                                                          |
+|--------|----------------------------------------------|----------------------------------------------------------------------|
+| GET    | `/`                                          | Returns the Yggdrasil API meta document (`static/index.json`)        |
+| GET    | `/minecraftservices/publickeys`              | Returns the cached Mojang public keys                                |
 | GET    | `/sessionserver/session/minecraft/hasJoined` | Verifies a join attempt across all configured authentication servers |
 
 ## Deployment

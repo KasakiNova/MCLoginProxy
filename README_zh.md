@@ -21,11 +21,11 @@ MCLoginProxy 位于 Minecraft 服务端（搭配 [authlib-injector](https://gith
 
 ## HTTP 接口
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET  | `/` | 返回 Yggdrasil API 元信息文档（`static/index.json`） |
-| GET  | `/minecraftservices/publickeys` | 返回已缓存的 Mojang 公钥 |
-| GET  | `/sessionserver/session/minecraft/hasJoined` | 在所有已配置的认证服务器上验证玩家加入请求 |
+| 方法  | 路径                                           | 说明                                          |
+|-----|----------------------------------------------|---------------------------------------------|
+| GET | `/`                                          | 返回 Yggdrasil API 元信息文档（`static/index.json`） |
+| GET | `/minecraftservices/publickeys`              | 返回已缓存的 Mojang 公钥                            |
+| GET | `/sessionserver/session/minecraft/hasJoined` | 在所有已配置的认证服务器上验证玩家加入请求                       |
 
 ## 部署
 

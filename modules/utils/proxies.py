@@ -1,4 +1,5 @@
 # coding=utf-8
+"""HTTP/HTTPS proxy support for outbound requests."""
 import requests
 
 import modules.globalVariables as gVar
@@ -6,32 +7,48 @@ from modules.Errors import ProxyError
 
 
 class Proxies:
-    def __init__(self):
+    """Build and validate proxy configuration from ``config.toml``."""
+
+    def __init__(self) -> None:
         self.__proxies = {}
         proxy_settings = gVar.cfgContext['Proxy']
         if proxy_settings['enable']:
-            # If enable auth
             if proxy_settings['enable_auth']:
                 protocol = proxy_settings['address'].split("://")[0]
                 link = proxy_settings['address'].split("://")[1]
                 self.__proxies = {
-                    "http": f"{protocol}://{proxy_settings['username']}:{proxy_settings['password']}@{link}",
-                    "https": f"{protocol}://{proxy_settings['username']}:{proxy_settings['password']}@{link}",
+                    "http": (
+                        f"{protocol}://"
+                        f"{proxy_settings['username']}:"
+                        f"{proxy_settings['password']}@"
+                        f"{link}"
+                    ),
+                    "https": (
+                        f"{protocol}://"
+                        f"{proxy_settings['username']}:"
+                        f"{proxy_settings['password']}@"
+                        f"{link}"
+                    ),
                 }
-            # this is no auths proxies
             else:
                 self.__proxies = {
-                    "http": f"{proxy_settings['address']}",
-                    "https": f"{proxy_settings['address']}"
+                    "http": proxy_settings['address'],
+                    "https": proxy_settings['address']
                 }
         gVar.proxies = self.__proxies
 
-    def check_proxies(self, url = "https://api.myip.la"):
+    def check_proxies(self,
+                      url: str = "https://api.myip.la") -> bool:
+        """Verify proxy connectivity by making a test request.
+
+        Returns True when the proxy responds with HTTP 200.
+        """
         try:
-            response = requests.get(url=url, proxies=self.__proxies, timeout=10)
+            response = requests.get(
+                url=url, proxies=self.__proxies, timeout=10
+            )
             if response.status_code == 200:
                 return True
-            else:
-                raise ProxyError
+            raise ProxyError
         except (requests.exceptions.RequestException, ProxyError):
             return False
