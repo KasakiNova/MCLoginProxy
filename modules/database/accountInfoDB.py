@@ -1,10 +1,14 @@
 # coding=utf-8
+import os
 import sqlite3
 import threading
 import modules.globalVariables as gVar
 
 
 def check_and_migrate_db() -> bool:
+    if not os.path.isfile(gVar.accountsInfoDB):
+        return False
+
     conn = sqlite3.connect(gVar.accountsInfoDB)
     cursor = conn.cursor()
     cursor.execute(
