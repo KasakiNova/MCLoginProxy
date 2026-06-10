@@ -13,6 +13,9 @@ static
 Test
 /test_logs/
 logs
+config
+.codegraph
+.vscode
 
 # Files
 web/publickeys.json
